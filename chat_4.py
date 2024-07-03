@@ -2,10 +2,8 @@ from flask import Flask, Response, render_template
 import threading
 import time
 import io
-import picamera
-from picamera.array import PiRGBArray
-from picamera import PiCamera
 import cv2
+from picamera2 import Picamera2, Preview
 
 app = Flask(__name__)
 
@@ -14,17 +12,15 @@ lock = threading.Lock()
 
 def capture_frames():
     global output_frame, lock
-    with picamera.PiCamera() as camera:
-        camera.resolution = (640, 480)
-        camera.framerate = 32
-        raw_capture = PiRGBArray(camera, size=(640, 480))
-        time.sleep(0.1)
+    picam2 = Picamera2()
+    config = picam2.create_preview_configuration(main={"size": (640, 480)})
+    picam2.configure(config)
+    picam2.start()
 
-        for frame in camera.capture_continuous(raw_capture, format="bgr", use_video_port=True):
-            image = frame.array
-            raw_capture.truncate(0)
-            with lock:
-                output_frame = image.copy()
+    while True:
+        image = picam2.capture_array()
+        with lock:
+            output_frame = image.copy()
 
 @app.route("/")
 def index():
