@@ -4,7 +4,10 @@ import time
 import io
 import cv2
 from picamera2 import Picamera2
-from pithermalcam import pithermalcam
+try:  # If called as an imported module
+	from pithermalcam import pithermalcam
+except:  # If run directly
+	from pi_therm_cam import pithermalcam
 
 app = Flask(__name__)
 
