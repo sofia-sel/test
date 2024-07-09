@@ -1,6 +1,7 @@
 from flask import Flask, Response, render_template
 import threading
 import time
+import io
 import cv2
 from picamera2 import Picamera2
 
@@ -17,21 +18,17 @@ thermal_output_frame = None
 hd_lock = threading.Lock()
 thermal_lock = threading.Lock()
 
-# Define the desired crop dimensions
-CROP_WIDTH = 550
-CROP_HEIGHT = 280
-
-# Calculate crop coordinates for HD camera
-CROP_TOP_LEFT_X = (4056 - CROP_WIDTH) // 2
-CROP_TOP_LEFT_Y = (3040 - CROP_HEIGHT) // 2
-CROP_BOTTOM_RIGHT_X = CROP_TOP_LEFT_X + CROP_WIDTH
-CROP_BOTTOM_RIGHT_Y = CROP_TOP_LEFT_Y + CROP_HEIGHT
+# Define the desired crop dimensions based on FOV calculation
+CROP_TOP_LEFT_X = 1247
+CROP_TOP_LEFT_Y = 770
+CROP_BOTTOM_RIGHT_X = 3809
+CROP_BOTTOM_RIGHT_Y = 2269
 
 # HD Camera Thread and Functionality
 def capture_hd_frames():
     global hd_output_frame, hd_lock
     picam2_hd = Picamera2()
-    config_hd = picam2_hd.create_preview_configuration(main={"size": (640, 480)})
+    config_hd = picam2_hd.create_preview_configuration(main={"size": (4056, 3040)})
     picam2_hd.configure(config_hd)
     picam2_hd.start()
 
