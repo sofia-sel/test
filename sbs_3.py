@@ -14,6 +14,10 @@ thermal_output_frame = None
 hd_lock = threading.Lock()
 thermal_lock = threading.Lock()
 
+# Define the desired crop dimensions
+CROP_WIDTH = 550
+CROP_HEIGHT = 280
+
 # HD Camera Thread and Functionality
 def capture_hd_frames():
     global hd_output_frame, hd_lock
@@ -24,9 +28,13 @@ def capture_hd_frames():
 
     while True:
         image_hd = picam2_hd.capture_array()
-        image_hd = cv2.cvtColor(image_hd, cv2.COLOR_BGR2RGB)
+        height, width, channels = image_hd.shape
+        start_x = (width - CROP_WIDTH) // 2
+        start_y = (height - CROP_HEIGHT) // 2
+        cropped_hd_image = image_hd[start_y:start_y+CROP_HEIGHT, start_x:start_x+CROP_WIDTH]
+        cropped_hd_image = cv2.cvtColor(cropped_hd_image, cv2.COLOR_BGR2RGB)
         with hd_lock:
-            hd_output_frame = image_hd.copy()
+            hd_output_frame = cropped_hd_image.copy()
 
 # Thermal Camera Thread and Functionality
 def pull_images():
@@ -86,4 +94,4 @@ if __name__ == '__main__':
     thermal_thread.start()
 
     # Run Flask app
-    app.run(host='0.0.0.0', port=8050, debug=True, threaded=True, use_reloader=False)
+    app.run(host='0.0.0.0', port=8010, debug=True, threaded=True, use_reloader=False)
