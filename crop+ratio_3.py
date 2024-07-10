@@ -71,8 +71,8 @@ def generate():
         if hd_frame is None or thermal_frame is None:
             continue
 
-        hd_frame = cv2.resize(hd_frame, (320, 240))
-        thermal_frame = cv2.resize(thermal_frame, (320, 240))
+        hd_frame = cv2.resize(hd_frame, (640, 480))
+        thermal_frame = cv2.resize(thermal_frame, (640, 480))
         
         # Combine frames horizontally
         combined_frame = cv2.hconcat([hd_frame, thermal_frame])
