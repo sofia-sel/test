@@ -70,9 +70,10 @@ def generate():
         if hd_frame is None or thermal_frame is None:
             continue
         
-        # Resize frames if needed to display side by side
-        hd_frame = cv2.resize(hd_frame, (320, 240))
-        thermal_frame = cv2.resize(thermal_frame, (320, 240))
+        # Ensure both frames are the same size and type
+        thermal_frame = cv2.resize(thermal_frame, (hd_frame.shape[1], hd_frame.shape[0]))
+        if len(hd_frame.shape) != len(thermal_frame.shape):
+            thermal_frame = cv2.cvtColor(thermal_frame, cv2.COLOR_GRAY2BGR)
         
         # Combine frames horizontally
         combined_frame = cv2.hconcat([hd_frame, thermal_frame])
