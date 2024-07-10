@@ -21,23 +21,21 @@ thermal_lock = threading.Lock()
 def capture_hd_frames():
     global hd_output_frame, hd_lock
     picam2_hd = Picamera2()
-    config_hd = picam2_hd.create_preview_configuration(main={"size": (2028, 1520)})
+    config_hd = picam2_hd.create_preview_configuration(main={"size": (1270, 950)})
     picam2_hd.configure(config_hd)
     picam2_hd.start()
 
     while True:
         image_hd = picam2_hd.capture_array()
-        # Reduce the image size by a factor of 5/8
-        reduced_hd_image = cv2.resize(image_hd, (int(image_hd.shape[1] * 5 / 8), int(image_hd.shape[0] * 5 / 8)))
         
         # Define the crop dimensions
-        crop_left = 293
-        crop_right = reduced_hd_image.shape[1] - 176
+        crop_left = 294
+        crop_right = image_hd.shape[1] - 176
         crop_top = 198
-        crop_bottom = reduced_hd_image.shape[0] - 153
+        crop_bottom = image_hd.shape[0] - 152
 
         # Crop the image
-        cropped_hd_image = reduced_hd_image[crop_top:crop_bottom, crop_left:crop_right]
+        cropped_hd_image = image_hd[crop_top:crop_bottom, crop_left:crop_right]
 
         with hd_lock:
             hd_output_frame = cropped_hd_image.copy()
@@ -51,8 +49,10 @@ def pull_images():
     while True:
         current_frame = thermcam.update_image_frame()
         if current_frame is not None:
+            # Resize thermal image to 800x600
+            resized_thermal_frame = cv2.resize(current_frame, (800, 600))
             with thermal_lock:
-                thermal_output_frame = current_frame.copy()
+                thermal_output_frame = resized_thermal_frame.copy()
 
 # Flask Routes
 @app.route("/")
@@ -70,10 +70,9 @@ def generate():
         if hd_frame is None or thermal_frame is None:
             continue
         
-        # Ensure both frames are the same size and type
-        thermal_frame = cv2.resize(thermal_frame, (hd_frame.shape[1], hd_frame.shape[0]))
-        if len(hd_frame.shape) != len(thermal_frame.shape):
-            thermal_frame = cv2.cvtColor(thermal_frame, cv2.COLOR_GRAY2BGR)
+        # Resize frames if needed to display side by side
+        hd_frame = cv2.resize(hd_frame, (320, 240))
+        thermal_frame = cv2.resize(thermal_frame, (320, 240))
         
         # Combine frames horizontally
         combined_frame = cv2.hconcat([hd_frame, thermal_frame])
