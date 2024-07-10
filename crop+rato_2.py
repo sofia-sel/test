@@ -21,21 +21,24 @@ thermal_lock = threading.Lock()
 def capture_hd_frames():
     global hd_output_frame, hd_lock
     picam2_hd = Picamera2()
-    config_hd = picam2_hd.create_preview_configuration(main={"size": (1270, 950)})
+    config_hd = picam2_hd.create_preview_configuration(main={"size": (2028, 1520)})
     picam2_hd.configure(config_hd)
     picam2_hd.start()
 
     while True:
         image_hd = picam2_hd.capture_array()
         
-        # Define the crop dimensions
+        # Resize image to 1270x950
+        resized_hd_image = cv2.resize(image_hd, (1270, 950))
+        
+        # Define crop dimensions after resizing
         crop_left = 294
-        crop_right = image_hd.shape[1] - 176
+        crop_right = resized_hd_image.shape[1] - 176
         crop_top = 198
-        crop_bottom = image_hd.shape[0] - 152
+        crop_bottom = resized_hd_image.shape[0] - 152
 
-        # Crop the image
-        cropped_hd_image = image_hd[crop_top:crop_bottom, crop_left:crop_right]
+        # Crop the resized image
+        cropped_hd_image = resized_hd_image[crop_top:crop_bottom, crop_left:crop_right]
 
         with hd_lock:
             hd_output_frame = cropped_hd_image.copy()
@@ -70,12 +73,12 @@ def generate():
         if hd_frame is None or thermal_frame is None:
             continue
         
-        # Resize frames if needed to display side by side
-        hd_frame = cv2.resize(hd_frame, (320, 240))
-        thermal_frame = cv2.resize(thermal_frame, (320, 240))
+        # Resize frames to 240 pixels in height
+        hd_frame_resized = cv2.resize(hd_frame, (int(hd_frame.shape[1] * 240 / hd_frame.shape[0]), 240))
+        thermal_frame_resized = cv2.resize(thermal_frame, (int(thermal_frame.shape[1] * 240 / thermal_frame.shape[0]), 240))
         
         # Combine frames horizontally
-        combined_frame = cv2.hconcat([hd_frame, thermal_frame])
+        combined_frame = cv2.hconcat([hd_frame_resized, thermal_frame_resized])
 
         # Encode combined frame
         (flag, encoded_image) = cv2.imencode(".jpg", combined_frame)
