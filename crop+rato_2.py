@@ -4,7 +4,10 @@ import time
 import io
 import cv2
 from picamera2 import Picamera2
-from pithermalcam import pithermalcam
+try:  # If called as an imported module
+    from pithermalcam import pithermalcam
+except:  # If run directly
+    from pi_therm_cam import pithermalcam
 
 app = Flask(__name__)
 
@@ -18,15 +21,26 @@ thermal_lock = threading.Lock()
 def capture_hd_frames():
     global hd_output_frame, hd_lock
     picam2_hd = Picamera2()
-    config_hd = picam2_hd.create_preview_configuration(main={"size": (640, 480)})
+    config_hd = picam2_hd.create_preview_configuration(main={"size": (2028, 1520)})
     picam2_hd.configure(config_hd)
     picam2_hd.start()
 
     while True:
         image_hd = picam2_hd.capture_array()
-        image_hd = cv2.cvtColor(image_hd, cv2.COLOR_BGR2RGB)
+        # Reduce the image size by a factor of 5/8
+        reduced_hd_image = cv2.resize(image_hd, (int(image_hd.shape[1] * 5 / 8), int(image_hd.shape[0] * 5 / 8)))
+        
+        # Define the crop dimensions
+        crop_left = 293
+        crop_right = reduced_hd_image.shape[1] - 176
+        crop_top = 198
+        crop_bottom = reduced_hd_image.shape[0] - 153
+
+        # Crop the image
+        cropped_hd_image = reduced_hd_image[crop_top:crop_bottom, crop_left:crop_right]
+
         with hd_lock:
-            hd_output_frame = image_hd.copy()
+            hd_output_frame = cropped_hd_image.copy()
 
 # Thermal Camera Thread and Functionality
 def pull_images():
@@ -43,48 +57,36 @@ def pull_images():
 # Flask Routes
 @app.route("/")
 def index():
-    return render_template("both.html")
-# can be called index.html but there already is one, so this test is being named both.html 
+    return render_template("index.html")
 
-def generate_hd():
-    global hd_output_frame, hd_lock
+def generate():
+    global hd_output_frame, thermal_output_frame, hd_lock, thermal_lock
     while True:
         with hd_lock:
             hd_frame = hd_output_frame.copy() if hd_output_frame is not None else None
-        
-        if hd_frame is None:
-            continue
-        
-        # Encode HD frame
-        (flag, encoded_image) = cv2.imencode(".jpg", hd_frame)
-        if not flag:
-            continue
-        
-        yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + bytearray(encoded_image) + b'\r\n')
-
-def generate_thermal():
-    global thermal_output_frame, thermal_lock
-    while True:
         with thermal_lock:
             thermal_frame = thermal_output_frame.copy() if thermal_output_frame is not None else None
         
-        if thermal_frame is None:
+        if hd_frame is None or thermal_frame is None:
             continue
         
-        # Encode Thermal frame
-        (flag, encoded_image) = cv2.imencode(".jpg", thermal_frame)
+        # Resize frames if needed to display side by side
+        hd_frame = cv2.resize(hd_frame, (320, 240))
+        thermal_frame = cv2.resize(thermal_frame, (320, 240))
+        
+        # Combine frames horizontally
+        combined_frame = cv2.hconcat([hd_frame, thermal_frame])
+
+        # Encode combined frame
+        (flag, encoded_image) = cv2.imencode(".jpg", combined_frame)
         if not flag:
             continue
         
         yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + bytearray(encoded_image) + b'\r\n')
 
-@app.route("/video_feed_hd")
-def video_feed_hd():
-    return Response(generate_hd(), mimetype="multipart/x-mixed-replace; boundary=frame")
-
-@app.route("/video_feed_thermal")
-def video_feed_thermal():
-    return Response(generate_thermal(), mimetype="multipart/x-mixed-replace; boundary=frame")
+@app.route("/video_feed")
+def video_feed():
+    return Response(generate(), mimetype="multipart/x-mixed-replace; boundary=frame")
 
 if __name__ == '__main__':
     # Start HD camera thread
