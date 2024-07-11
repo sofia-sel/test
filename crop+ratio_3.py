@@ -18,10 +18,12 @@ hd_lock = threading.Lock()
 thermal_lock = threading.Lock()
 
 # Define the desired crop dimensions for HD camera
-CROP_LEFT = 294
-CROP_RIGHT = 176
+#CROP_LEFT = 294
+#CROP_RIGHT = 176
 CROP_TOP = 198
 CROP_BOTTOM = 152
+CROP_LEFT = 176
+CROP_RIGHT = 294
 
 # HD Camera Thread and Functionality
 def capture_hd_frames():
