@@ -74,10 +74,8 @@ def generate():
             continue
 
         # Resize thermal frame to match the HD frame size
-        thermal_frame = cv2.resize(thermal_frame, (hd_frame.shape[1], hd_frame.shape[0]))
-
-        # Convert thermal frame to RGB
-        thermal_frame = cv2.cvtColor(thermal_frame, cv2.COLOR_GRAY2RGB)
+        hd_frame = cv2.resize(hd_frame, (640, 480))
+        thermal_frame = cv2.resize(thermal_frame, (640, 480))
 
         # Blend the thermal frame with the HD frame
         blended_frame = cv2.addWeighted(hd_frame, 1 - alpha, thermal_frame, alpha, 0)
@@ -105,4 +103,4 @@ if __name__ == '__main__':
     thermal_thread.start()
 
     # Run Flask app
-    app.run(host='0.0.0.0', port=8007, debug=True, threaded=True, use_reloader=False)
+    app.run(host='0.0.0.0', port=8010, debug=True, threaded=True, use_reloader=False)
