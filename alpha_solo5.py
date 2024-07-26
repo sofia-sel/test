@@ -60,8 +60,9 @@ def pull_images():
             thermal_output_frame = np.uint8((frame_2d - frame_2d.min()) / (frame_2d.ptp() / 255.0))
             thermal_output_frame = ndimage.zoom(thermal_output_frame, (20, 20), order=1)  # Scale to match HD size
 
-            # Convert to 3 channel BGR
-            thermal_output_frame = cv2.cvtColor(thermal_output_frame, cv2.COLOR_GRAY2BGR)
+            # Convert to 3 channel BGR if not already
+            if len(thermal_output_frame.shape) == 2:  # If thermal_output_frame has only one channel
+                thermal_output_frame = cv2.cvtColor(thermal_output_frame, cv2.COLOR_GRAY2BGR)
             
             with thermal_lock:
                 thermal_output_frame = thermal_output_frame.copy()
@@ -104,7 +105,10 @@ def generate():
             hd_frame = hd_frame[:, :, :3]
 
         # Convert thermal frame to grayscale to process temperature values
-        thermal_gray = cv2.cvtColor(thermal_frame, cv2.COLOR_BGR2GRAY)
+        if thermal_frame.shape[2] == 3:
+            thermal_gray = cv2.cvtColor(thermal_frame, cv2.COLOR_BGR2GRAY)
+        else:
+            thermal_gray = thermal_frame
 
         # Create masks for pixels above and below the threshold
         above_threshold_mask = thermal_gray >= threshold_pixel_value
