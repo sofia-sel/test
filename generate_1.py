@@ -19,7 +19,7 @@ def generate():
         if hd_frame is None or thermal_frame is None:
             continue
 
-        # Resize thermal frame to match the HD frame size
+        # Ensure both frames have the same dimensions
         hd_frame = cv2.resize(hd_frame, (640, 480))
         thermal_frame = cv2.resize(thermal_frame, (640, 480))
 
@@ -33,6 +33,12 @@ def generate():
         # Create 3-channel masks for blending
         above_threshold_mask_3c = np.stack([above_threshold_mask] * 3, axis=-1)
         below_threshold_mask_3c = np.stack([below_threshold_mask] * 3, axis=-1)
+
+        # Ensure both frames have the same number of channels
+        if len(hd_frame.shape) == 2:
+            hd_frame = cv2.cvtColor(hd_frame, cv2.COLOR_GRAY2BGR)
+        if len(thermal_frame.shape) == 2:
+            thermal_frame = cv2.cvtColor(thermal_frame, cv2.COLOR_GRAY2BGR)
 
         # Apply alpha blending to create translucent effect for pixels above the threshold
         blended_above_threshold = cv2.addWeighted(thermal_frame, alpha, hd_frame, 1 - alpha, 0)
