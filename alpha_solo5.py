@@ -1,4 +1,4 @@
-from flask import Flask, Response
+from flask import Flask, Response, render_template
 import threading
 import time
 import cv2
@@ -28,48 +28,44 @@ CROP_BOTTOM = 152
 CROP_LEFT = 176
 CROP_RIGHT = 294
 
+# HD Camera Thread and Functionality
 def capture_hd_frames():
     global hd_output_frame, hd_lock
-    # Initialize the HD camera
-    picam2 = Picamera2()
-    picam2.configure(picam2.create_preview_configuration(main={"size": (1280, 720)}))
-    picam2.start()
-    
+    picam2_hd = Picamera2()
+    config_hd = picam2_hd.create_preview_configuration(main={"size": (1270, 950)})  # Set capture size to 1270x950
+    picam2_hd.configure(config_hd)
+    picam2_hd.start()
+
     while True:
-        frame = picam2.capture_array()
+        image_hd = picam2_hd.capture_array()
         
-        # Crop the frame
-        frame = frame[CROP_TOP:-CROP_BOTTOM, CROP_LEFT:-CROP_RIGHT]
+        # Crop the image
+        cropped_hd_image = image_hd[CROP_TOP:-CROP_BOTTOM, CROP_LEFT:-CROP_RIGHT]
+        
+        # Convert to RGB for compatibility with OpenCV
+        cropped_hd_image = cv2.cvtColor(cropped_hd_image, cv2.COLOR_BGR2RGB)
         
         with hd_lock:
-            hd_output_frame = frame.copy()
-        
-        time.sleep(0.033)  # Adjust based on your camera's frame rate
+            hd_output_frame = cropped_hd_image.copy()
+        time.sleep(0.03)  # Reduce CPU usage
 
+# Thermal Camera Thread and Functionality
 def pull_images():
     global thermal_output_frame, thermal_lock
-    i2c = busio.I2C(board.SCL, board.SDA, frequency=400000)
-    mlx = adafruit_mlx90640.MLX90640(i2c)
-    mlx.refresh_rate = adafruit_mlx90640.RefreshRate.REFRESH_8_HZ
+    thermcam = pithermalcam(output_folder='/home/pi/pithermalcam/saved_snapshots/')
+    time.sleep(0.1)
 
     while True:
-        try:
-            frame = [0] * 768
-            mlx.getFrame(frame)
-            frame_2d = np.reshape(frame, (24, 32))
-            thermal_output_frame = np.uint8((frame_2d - frame_2d.min()) / (frame_2d.ptp() / 255.0))
-            thermal_output_frame = ndimage.zoom(thermal_output_frame, (20, 20), order=1)  # Scale to match HD size
-
-            # Convert to 3 channel BGR if not already
-            if len(thermal_output_frame.shape) == 2:  # If thermal_output_frame has only one channel
-                thermal_output_frame = cv2.cvtColor(thermal_output_frame, cv2.COLOR_GRAY2BGR)
-            
+        current_frame = thermcam.update_image_frame()
+        if current_frame is not None:
             with thermal_lock:
-                thermal_output_frame = thermal_output_frame.copy()
-            
-            time.sleep(0.125)  # 8 Hz frame rate
-        except Exception as e:
-            print(f"Thermal camera error: {e}")
+                thermal_output_frame = current_frame.copy()
+        time.sleep(0.03)  # Reduce CPU usage
+
+# Flask Routes
+@app.route("/")
+def index():
+    return render_template("index.html")
 
 def generate():
     global hd_output_frame, thermal_output_frame, hd_lock, thermal_lock
@@ -88,47 +84,37 @@ def generate():
             hd_frame = hd_output_frame.copy() if hd_output_frame is not None else None
         with thermal_lock:
             thermal_frame = thermal_output_frame.copy() if thermal_output_frame is not None else None
-
+        
         if hd_frame is None or thermal_frame is None:
             continue
 
-        # Resize thermal frame to match the HD frame size
+        # Resize frames to match each other
         hd_frame = cv2.resize(hd_frame, (640, 480))
         thermal_frame = cv2.resize(thermal_frame, (640, 480))
 
-        # Print shapes for debugging
-        print(f"HD Frame shape: {hd_frame.shape}")
-        print(f"Thermal Frame shape: {thermal_frame.shape}")
-
-        # Convert HD frame to 3 channels by removing alpha channel
-        if hd_frame.shape[2] == 4:
-            hd_frame = hd_frame[:, :, :3]
-
         # Convert thermal frame to grayscale to process temperature values
-        if thermal_frame.shape[2] == 3:
-            thermal_gray = cv2.cvtColor(thermal_frame, cv2.COLOR_BGR2GRAY)
-        else:
-            thermal_gray = thermal_frame
+        thermal_gray = cv2.cvtColor(thermal_frame, cv2.COLOR_BGR2GRAY)
 
-        # Create masks for pixels above and below the threshold
-        above_threshold_mask = thermal_gray >= threshold_pixel_value
-        below_threshold_mask = ~above_threshold_mask
+        # Create a mask for areas with high temperatures
+        high_temp_mask = thermal_gray >= threshold_pixel_value
 
-        # Create 3-channel masks for blending
-        above_threshold_mask_3c = np.stack([above_threshold_mask] * 3, axis=-1)
-        below_threshold_mask_3c = np.stack([below_threshold_mask] * 3, axis=-1)
+        # Convert HD frame to float for blending
+        hd_frame_float = hd_frame.astype(float)
+        thermal_frame_float = thermal_frame.astype(float)
 
-        # Apply alpha blending to create translucent effect for pixels above the threshold
-        blended_above_threshold = cv2.addWeighted(thermal_frame, alpha, hd_frame, 1 - alpha, 0)
+        # Apply alpha blending where temperatures are high
+        blended_frame = np.where(high_temp_mask[:, :, None], 
+                                 alpha * thermal_frame_float + (1 - alpha) * hd_frame_float, 
+                                 hd_frame_float)
 
-        # Combine the frames using the masks
-        blended_frame = np.where(above_threshold_mask_3c, blended_above_threshold, hd_frame)
+        # Convert back to uint8
+        blended_frame = np.clip(blended_frame, 0, 255).astype(np.uint8)
 
         # Encode the blended frame
         (flag, encoded_image) = cv2.imencode(".jpg", blended_frame)
         if not flag:
             continue
-
+        
         yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + bytearray(encoded_image) + b'\r\n')
 
 @app.route("/video_feed")
