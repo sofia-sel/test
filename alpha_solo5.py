@@ -95,8 +95,13 @@ def generate():
         hd_frame = cv2.resize(hd_frame, (640, 480))
         thermal_frame = cv2.resize(thermal_frame, (640, 480))
 
+        # Print shapes for debugging
         print(f"HD Frame shape: {hd_frame.shape}")
         print(f"Thermal Frame shape: {thermal_frame.shape}")
+
+        # Convert HD frame to 3 channels by removing alpha channel
+        if hd_frame.shape[2] == 4:
+            hd_frame = hd_frame[:, :, :3]
 
         # Convert thermal frame to grayscale to process temperature values
         thermal_gray = cv2.cvtColor(thermal_frame, cv2.COLOR_BGR2GRAY)
